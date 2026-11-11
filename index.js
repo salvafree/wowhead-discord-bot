@@ -11,16 +11,15 @@ const client = new Client({
 
 const TOKEN = process.env.DISCORD_TOKEN;
 
-// Colores de rareza de WoW en código Hexadecimal para Discord
 const QUALITY_COLORS = {
-  0: '#9d9d9d', // Pobre (Gris)
-  1: '#ffffff', // Común (Blanco)
-  2: '#1eff00', // Poco común (Verde)
-  3: '#0070dd', // Raro (Azul)
-  4: '#a335ee', // Épico (Morado)
-  5: '#ff8000', // Legendario (Naranja)
-  6: '#e6cc80', // Artefacto (Dorado)
-  7: '#00ccff', // Reliquia (Azul claro)
+  0: '#9d9d9d',
+  1: '#ffffff',
+  2: '#1eff00',
+  3: '#0070dd',
+  4: '#a335ee',
+  5: '#ff8000',
+  6: '#e6cc80',
+  7: '#00ccff',
 };
 
 client.once('ready', () => {
@@ -38,44 +37,47 @@ client.on('messageCreate', async (message) => {
     if (!itemName) continue;
 
     try {
-      console.log(`[LOG] Buscando objeto: "${itemName}"...`);
+      console.log(`[LOG] Consultando Wowhead para: "${itemName}"...`);
 
-      // Dominios a probar en orden: Español, Francés e Inglés/Global
+      // Usamos el endpoint directo de tooltips por nombre normalizado que Wowhead utiliza internamente
+      // Probamos primero en español (es), luego francés (fr) e inglés (www)
       const domains = ['es.wowhead.com', 'fr.wowhead.com', 'www.wowhead.com'];
-      let itemResult = null;
-      let targetDomain = 'www.wowhead.com';
+      let itemData = null;
+      let targetDomain = '';
 
       for (const domain of domains) {
         try {
-          const searchUrl = `https://${domain}/search?q=${encodeURIComponent(itemName)}&formatting=json`;
-          const response = await axios.get(searchUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          const tooltipUrl = `https://${domain}/tooltip/item/${encodeURIComponent(itemName.toLowerCase())}`;
+          const response = await axios.get(tooltipUrl, {
+            headers: { 
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': 'application/json, text/javascript, */*; q=0.01',
+              'Referer': `https://${domain}/`
+            },
             timeout: 4000
           });
 
-          const data = response.data;
-          if (data && data.i && data.i.length > 0) {
-            itemResult = data.i[0];
+          if (response.data && response.data.name) {
+            itemData = response.data;
             targetDomain = domain;
-            break; // Objeto encontrado, salimos del bucle
+            break;
           }
-        } catch (err) {
-          // Si falla un dominio, probamos con el siguiente
+        } catch (e) {
+          // Si da 404 en este idioma, probamos el siguiente
         }
       }
 
-      if (itemResult) {
-        const itemId = itemResult.id;
-        const name = itemResult.name;
-        const iconName = itemResult.icon ? itemResult.icon.toLowerCase() : 'inv_misc_questionmark';
-        const qualityId = itemResult.quality !== undefined ? itemResult.quality : 1;
+      if (itemData) {
+        const itemId = itemData.id;
+        const name = itemData.name;
+        const iconName = itemData.icon ? itemData.icon.toLowerCase() : 'inv_misc_questionmark';
+        const qualityId = itemData.quality !== undefined ? itemData.quality : 1;
         
-        // El enlace y el idioma se adaptan automáticamente al dominio que encontró el objeto
         const itemUrl = `https://${targetDomain}/item=${itemId}`;
         const iconUrl = `https://wowhead.zamimg.com/images/wow/icons/large/${iconName}.jpg`;
         const embedColor = QUALITY_COLORS[qualityId] || '#ffffff';
 
-        console.log(`[LOG] ¡Encontrado en ${targetDomain}! ID: ${itemId} | Nombre: ${name}`);
+        console.log(`[LOG] ¡Objeto encontrado en ${targetDomain}! ID: ${itemId} | Nombre: ${name}`);
 
         const embed = new EmbedBuilder()
           .setTitle(name)
@@ -88,7 +90,7 @@ client.on('messageCreate', async (message) => {
           allowedMentions: { repliedUser: false }
         });
       } else {
-        console.log(`[LOG] No se encontró resultado para "${itemName}" en ningún idioma.`);
+        console.log(`[LOG] No se pudo resolver el objeto "${itemName}" en ningún dominio.`);
       }
     } catch (error) {
       console.error(`[ERROR] Procesando "${itemName}":`, error.message);
