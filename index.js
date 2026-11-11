@@ -32,24 +32,17 @@ client.once('ready', () => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // Log para comprobar si el bot lee los mensajes del chat
-  console.log(`[LOG] Mensaje recibido de ${message.author.tag}: "${message.content}"`);
-
   const matches = message.content.match(/\[(.*?)\]/g);
-  if (!matches) {
-    console.log(`[LOG] No se han encontrado corchetes [...] en el mensaje.`);
-    return;
-  }
-
-  console.log(`[LOG] Coincidencias encontradas:`, matches);
+  if (!matches) return;
 
   for (const match of matches) {
     const itemName = match.slice(1, -1).trim();
     if (!itemName) continue;
 
     try {
-      const searchUrl = `https://www.wowhead.com/item=${encodeURIComponent(itemName)}&xml`;
-      console.log(`[LOG] Consultando Wowhead para "${itemName}" -> URL: ${searchUrl}`);
+      // Usamos el buscador general de Wowhead con XML para que soporte nombres en español y acentos
+      const searchUrl = `https://www.wowhead.com/search?q=${encodeURIComponent(itemName)}&xml`;
+      console.log(`[LOG] Buscando en Wowhead: "${itemName}"`);
 
       const response = await axios.get(searchUrl, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
@@ -57,19 +50,19 @@ client.on('messageCreate', async (message) => {
 
       const result = await xmlParser.parseStringPromise(response.data);
 
-      if (result && result.wowhead && result.wowhead.item) {
-        const itemData = result.wowhead.item[0];
+      // El buscador general devuelve los resultados dentro de <results><item>...</item></results>
+      if (result && result.wowhead && result.wowhead.results && result.wowhead.results[0] && result.wowhead.results[0].item) {
+        const itemData = result.wowhead.results[0].item[0];
         const itemId = itemData.$.id;
         const name = itemData.name[0];
-        const iconName = itemData.icon ? itemData.icon[0]._ : 'inv_misc_questionmark';
-        const qualityId = itemData.quality ? parseInt(itemData.quality[0].$.id) : 1;
+        const iconName = itemData.icon ? itemData.icon[0] : 'inv_misc_questionmark';
+        const qualityId = itemData.quality ? parseInt(itemData.quality[0]) : 1;
         
-        // URLs corregidas (sin formato markdown duplicado)
         const itemUrl = `https://www.wowhead.com/item=${itemId}`;
         const iconUrl = `https://wowhead.zamimg.com/images/wow/icons/large/${iconName.toLowerCase()}.jpg`;
         const embedColor = QUALITY_COLORS[qualityId] || '#ffffff';
 
-        console.log(`[LOG] ¡Objeto encontrado! ID: ${itemId} | Nombre: ${name} | Icono: ${iconName}`);
+        console.log(`[LOG] ¡Encontrado! ID: ${itemId} | Nombre: ${name}`);
 
         const embed = new EmbedBuilder()
           .setTitle(name)
@@ -79,11 +72,10 @@ client.on('messageCreate', async (message) => {
 
         await message.reply({
           embeds: [embed],
-          allowedMentions: { repliedUser: false }
+          allowedMentions: { repliedUser: lesser = false }
         });
-        console.log(`[LOG] Respuesta enviada con éxito para "${name}"`);
       } else {
-        console.log(`[LOG] Wowhead no devolvió resultados válidos para "${itemName}".`);
+        console.log(`[LOG] No se encontraron resultados en Wowhead para "${itemName}".`);
       }
     } catch (error) {
       console.error(`[ERROR] Buscando "${itemName}":`, error.message);
