@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^1.21.1",
+    "csv-parse": "^7.0.3",
     "discord.js": "^14.28.1",
     "xml2js": "^0.6.2"
   }
