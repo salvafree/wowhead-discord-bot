@@ -11,16 +11,30 @@ const client = new Client({
 
 const TOKEN = process.env.DISCORD_TOKEN;
 
+// Colores de rareza de WoW en código Hexadecimal para Discord
 const QUALITY_COLORS = {
-  0: '#9d9d9d',
-  1: '#ffffff',
-  2: '#1eff00',
-  3: '#0070dd',
-  4: '#a335ee',
-  5: '#ff8000',
-  6: '#e6cc80',
-  7: '#00ccff',
+  0: '#9d9d9d', // Pobre (Gris)
+  1: '#ffffff', // Común (Blanco)
+  2: '#1eff00', // Poco común (Verde)
+  3: '#0070dd', // Raro (Azul)
+  4: '#a335ee', // Épico (Morado)
+  5: '#ff8000', // Legendario (Naranja)
+  6: '#e6cc80', // Artefacto (Dorado)
+  7: '#00ccff', // Reliquia (Azul claro)
 };
+
+// Función para transformar nombres con tildes y espacios en slugs válidos para Wowhead
+// Ej: "Poción de curación menor" -> "pocion-de-curacion-menor"
+function slugify(text) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Elimina tildes y marcas diacríticas
+    .replace(/['']/g, "")            // Elimina apóstrofes
+    .replace(/[^a-z0-9\s-]/g, "")    // Elimina caracteres especiales
+    .trim()
+    .replace(/\s+/g, "-");           // Reemplaza espacios por guiones
+}
 
 client.once('ready', () => {
   console.log(`Bot multilingüe listo como ${client.user.tag}`);
@@ -37,21 +51,21 @@ client.on('messageCreate', async (message) => {
     if (!itemName) continue;
 
     try {
-      console.log(`[LOG] Consultando Wowhead para: "${itemName}"...`);
+      const itemSlug = slugify(itemName);
+      console.log(`[LOG] Buscando objeto: "${itemName}" -> Slug: "${itemSlug}"`);
 
-      // Usamos el endpoint directo de tooltips por nombre normalizado que Wowhead utiliza internamente
-      // Probamos primero en español (es), luego francés (fr) e inglés (www)
+      // Probamos los dominios en orden: Español, Francés e Inglés
       const domains = ['es.wowhead.com', 'fr.wowhead.com', 'www.wowhead.com'];
       let itemData = null;
       let targetDomain = '';
 
       for (const domain of domains) {
         try {
-          const tooltipUrl = `https://${domain}/tooltip/item/${encodeURIComponent(itemName.toLowerCase())}`;
+          const tooltipUrl = `https://${domain}/tooltip/item/${itemSlug}`;
           const response = await axios.get(tooltipUrl, {
             headers: { 
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': 'application/json, text/javascript, */*; q=0.01',
+              'Accept': 'application/json, text/javascript, */; q=0.01',
               'Referer': `https://${domain}/`
             },
             timeout: 4000
@@ -60,10 +74,10 @@ client.on('messageCreate', async (message) => {
           if (response.data && response.data.name) {
             itemData = response.data;
             targetDomain = domain;
-            break;
+            break; // Encontrado, salimos del bucle
           }
         } catch (e) {
-          // Si da 404 en este idioma, probamos el siguiente
+          // Si da 404 en este dominio, probamos el siguiente idioma
         }
       }
 
@@ -77,7 +91,7 @@ client.on('messageCreate', async (message) => {
         const iconUrl = `https://wowhead.zamimg.com/images/wow/icons/large/${iconName}.jpg`;
         const embedColor = QUALITY_COLORS[qualityId] || '#ffffff';
 
-        console.log(`[LOG] ¡Objeto encontrado en ${targetDomain}! ID: ${itemId} | Nombre: ${name}`);
+        console.log(`[LOG] ¡Encontrado en ${targetDomain}! ID: ${itemId} | Nombre: ${name}`);
 
         const embed = new EmbedBuilder()
           .setTitle(name)
@@ -90,7 +104,7 @@ client.on('messageCreate', async (message) => {
           allowedMentions: { repliedUser: false }
         });
       } else {
-        console.log(`[LOG] No se pudo resolver el objeto "${itemName}" en ningún dominio.`);
+        console.log(`[LOG] No se encontró el objeto "${itemName}" en ningún dominio.`);
       }
     } catch (error) {
       console.error(`[ERROR] Procesando "${itemName}":`, error.message);
