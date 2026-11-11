@@ -12,15 +12,24 @@ const client = new Client({
 const TOKEN = process.env.DISCORD_TOKEN;
 
 const QUALITY_COLORS = {
-  0: '#9d9d9d',
-  1: '#ffffff',
-  2: '#1eff00',
-  3: '#0070dd',
-  4: '#a335ee',
-  5: '#ff8000',
-  6: '#e6cc80',
-  7: '#00ccff',
+  0: '#9d9d9d', // Pobre
+  1: '#ffffff', // Común
+  2: '#1eff00', // Poco común
+  3: '#0070dd', // Raro
+  4: '#a335ee', // Épico
+  5: '#ff8000', // Legendario
+  6: '#e6cc80', // Artefacto
+  7: '#00ccff', // Reliquia
 };
+
+// Función para limpiar tildes y caracteres especiales para evitar errores 404 en la API
+function sanitizeQuery(text) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Elimina tildes
+    .trim();
+}
 
 client.once('clientReady', () => {
   console.log(`Bot Forever listo como ${client.user.tag}`);
@@ -33,30 +42,21 @@ client.on('messageCreate', async (message) => {
   if (!matches) return;
 
   for (const match of matches) {
-    const itemName = match.slice(1, -1).trim();
-    if (!itemName) continue;
+    const rawItemName = match.slice(1, -1).trim();
+    if (!rawItemName) continue;
 
     try {
-      console.log(`[LOG] Buscando objeto: "${itemName}"...`);
+      const cleanQuery = sanitizeQuery(rawItemName);
+      console.log(`[LOG] Buscando objeto: "${rawItemName}" (Limpio: "${cleanQuery}")...`);
 
-      // Usamos cabeceras HTTP de un navegador real de escritorio para evitar el 403 de Cloudflare
-      const searchUrl = `https://www.wowhead.com/search/suggest?q=${encodeURIComponent(itemName)}`;
+      const searchUrl = `https://www.wowhead.com/search/suggest?q=${encodeURIComponent(cleanQuery)}`;
       
       const response = await axios.get(searchUrl, {
         headers: { 
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-          'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8,fr;q=0.7',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-          'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="99"',
-          'Sec-Ch-Ua-Mobile': '?0',
-          'Sec-Ch-Ua-Platform': '"Windows"',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': 'none',
-          'Sec-Fetch-User': '?1',
-          'Upgrade-Insecure-Requests': '1'
+          'Accept': 'application/json, text/plain, */*',
+          'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+          'Referer': 'https://www.wowhead.com/'
         },
         timeout: 5000
       });
@@ -71,11 +71,11 @@ client.on('messageCreate', async (message) => {
 
       if (itemResult) {
         const itemId = itemResult.id;
-        const name = itemResult.name || itemName;
+        const name = itemResult.name || rawItemName;
         const iconName = itemResult.icon ? itemResult.icon.toLowerCase() : 'inv_misc_questionmark';
         const qualityId = itemResult.quality !== undefined ? itemResult.quality : 1;
         
-        // Enlace estructurado Forever en español
+        // Enlace Forever estructurado correctamente con el ID obtenido
         const itemUrl = `https://es.wowhead.com/forever/es/item=${itemId}`;
         const iconUrl = `https://wowhead.zamimg.com/images/wow/icons/large/${iconName}.jpg`;
         const embedColor = QUALITY_COLORS[qualityId] || '#ffffff';
@@ -93,10 +93,10 @@ client.on('messageCreate', async (message) => {
           allowedMentions: { repliedUser: false }
         });
       } else {
-        console.log(`[LOG] No se encontró el objeto "${itemName}" en Wowhead.`);
+        console.log(`[LOG] No se encontró el objeto "${rawItemName}" en Wowhead.`);
       }
     } catch (error) {
-      console.error(`[ERROR] Procesando "${itemName}":`, error.message);
+      console.error(`[ERROR] Procesando "${rawItemName}":`, error.message);
     }
   }
 });
