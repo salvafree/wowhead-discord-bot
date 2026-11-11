@@ -40,9 +40,9 @@ client.on('messageCreate', async (message) => {
     if (!itemName) continue;
 
     try {
-      const searchUrl = `[https://www.wowhead.com/item=$](https://www.wowhead.com/item=$){encodeURIComponent(itemName)}&xml`;
+      const searchUrl = `https://www.wowhead.com/item=${encodeURIComponent(itemName)}&xml`;
       const response = await axios.get(searchUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
       });
 
       const result = await xmlParser.parseStringPromise(response.data);
