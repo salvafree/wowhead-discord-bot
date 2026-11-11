@@ -1,6 +1,5 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
-const xml2js = require('xml2js');
 
 const client = new Client({
   intents: [
@@ -11,7 +10,6 @@ const client = new Client({
 });
 
 const TOKEN = process.env.DISCORD_TOKEN;
-const xmlParser = new xml2js.Parser();
 
 // Colores de rareza de WoW en código Hexadecimal para Discord
 const QUALITY_COLORS = {
@@ -40,26 +38,26 @@ client.on('messageCreate', async (message) => {
     if (!itemName) continue;
 
     try {
-      // Usamos el buscador general de Wowhead con XML para que soporte nombres en español y acentos
-      const searchUrl = `https://www.wowhead.com/search?q=${encodeURIComponent(itemName)}&xml`;
-      console.log(`[LOG] Buscando en Wowhead: "${itemName}"`);
+      // Usamos la API JSON de Wowhead para tooltips en español (o la general)
+      // Nota: 'es' en la URL prioriza la versión en español de los objetos
+      const searchUrl = `https://es.wowhead.com/tooltip/item/${encodeURIComponent(itemName)}`;
+      console.log(`[LOG] Consultando Wowhead para: "${itemName}"`);
 
       const response = await axios.get(searchUrl, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
       });
 
-      const result = await xmlParser.parseStringPromise(response.data);
+      const data = response.data;
 
-      // El buscador general devuelve los resultados dentro de <results><item>...</item></results>
-      if (result && result.wowhead && result.wowhead.results && result.wowhead.results[0] && result.wowhead.results[0].item) {
-        const itemData = result.wowhead.results[0].item[0];
-        const itemId = itemData.$.id;
-        const name = itemData.name[0];
-        const iconName = itemData.icon ? itemData.icon[0] : 'inv_misc_questionmark';
-        const qualityId = itemData.quality ? parseInt(itemData.quality[0]) : 1;
+      if (data && data.name) {
+        const itemId = data.id;
+        const name = data.name;
+        // El icono viene en minúsculas y limpio
+        const iconName = data.icon ? data.icon.toLowerCase() : 'inv_misc_questionmark';
+        const qualityId = data.quality !== undefined ? data.quality : 1;
         
-        const itemUrl = `https://www.wowhead.com/item=${itemId}`;
-        const iconUrl = `https://wowhead.zamimg.com/images/wow/icons/large/${iconName.toLowerCase()}.jpg`;
+        const itemUrl = `https://es.wowhead.com/item=${itemId}`;
+        const iconUrl = `https://wowhead.zamimg.com/images/wow/icons/large/${iconName}.jpg`;
         const embedColor = QUALITY_COLORS[qualityId] || '#ffffff';
 
         console.log(`[LOG] ¡Encontrado! ID: ${itemId} | Nombre: ${name}`);
@@ -72,10 +70,10 @@ client.on('messageCreate', async (message) => {
 
         await message.reply({
           embeds: [embed],
-          allowedMentions: { repliedUser: lesser = false }
+          allowedMentions: { repliedUser: false }
         });
       } else {
-        console.log(`[LOG] No se encontraron resultados en Wowhead para "${itemName}".`);
+        console.log(`[LOG] No se encontró el objeto "${itemName}" en Wowhead.`);
       }
     } catch (error) {
       console.error(`[ERROR] Buscando "${itemName}":`, error.message);
