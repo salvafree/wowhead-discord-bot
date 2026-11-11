@@ -11,33 +11,20 @@ const client = new Client({
 
 const TOKEN = process.env.DISCORD_TOKEN;
 
-// Colores de rareza de WoW en código Hexadecimal para Discord
+// Colores de rareza de WoW en Hexadecimal
 const QUALITY_COLORS = {
-  0: '#9d9d9d', // Pobre (Gris)
-  1: '#ffffff', // Común (Blanco)
-  2: '#1eff00', // Poco común (Verde)
-  3: '#0070dd', // Raro (Azul)
-  4: '#a335ee', // Épico (Morado)
-  5: '#ff8000', // Legendario (Naranja)
-  6: '#e6cc80', // Artefacto (Dorado)
-  7: '#00ccff', // Reliquia (Azul claro)
+  0: '#9d9d9d', // Pobre
+  1: '#ffffff', // Común
+  2: '#1eff00', // Poco común
+  3: '#0070dd', // Raro
+  4: '#a335ee', // Épico
+  5: '#ff8000', // Legendario
+  6: '#e6cc80', // Artefacto
+  7: '#00ccff', // Reliquia
 };
 
-// Función para transformar nombres con tildes y espacios en slugs válidos para Wowhead
-// Ej: "Poción de curación menor" -> "pocion-de-curacion-menor"
-function slugify(text) {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // Elimina tildes y marcas diacríticas
-    .replace(/['']/g, "")            // Elimina apóstrofes
-    .replace(/[^a-z0-9\s-]/g, "")    // Elimina caracteres especiales
-    .trim()
-    .replace(/\s+/g, "-");           // Reemplaza espacios por guiones
-}
-
 client.once('ready', () => {
-  console.log(`Bot multilingüe listo como ${client.user.tag}`);
+  console.log(`Bot Forever multilingüe listo como ${client.user.tag}`);
 });
 
 client.on('messageCreate', async (message) => {
@@ -51,43 +38,52 @@ client.on('messageCreate', async (message) => {
     if (!itemName) continue;
 
     try {
-      const itemSlug = slugify(itemName);
-      console.log(`[LOG] Buscando objeto: "${itemName}" -> Slug: "${itemSlug}"`);
+      console.log(`[LOG] Buscando en Wowhead: "${itemName}"...`);
 
-      // Probamos los dominios en orden: Español, Francés e Inglés
+      // Dominios a probar en orden: Español, Francés e Inglés
       const domains = ['es.wowhead.com', 'fr.wowhead.com', 'www.wowhead.com'];
-      let itemData = null;
+      let itemResult = null;
       let targetDomain = '';
 
       for (const domain of domains) {
         try {
-          const tooltipUrl = `https://${domain}/tooltip/item/${itemSlug}`;
-          const response = await axios.get(tooltipUrl, {
+          const searchUrl = `https://${domain}/search/suggest?q=${encodeURIComponent(itemName)}`;
+          
+          const response = await axios.get(searchUrl, {
             headers: { 
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': 'application/json, text/javascript, */; q=0.01',
-              'Referer': `https://${domain}/`
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+              'Accept': 'application/json, text/plain, */*'
             },
             timeout: 4000
           });
 
-          if (response.data && response.data.name) {
-            itemData = response.data;
-            targetDomain = domain;
-            break; // Encontrado, salimos del bucle
+          const data = response.data;
+          if (data) {
+            const results = Array.isArray(data) ? data : (data.results || data.items || []);
+            const found = results.find(r => r.type === 3 || r.typeName === 'Item') || results[0];
+
+            if (found) {
+              itemResult = found;
+              targetDomain = domain;
+              break; // ¡Encontrado! Salimos del bucle
+            }
           }
         } catch (e) {
-          // Si da 404 en este dominio, probamos el siguiente idioma
+          // Si falla en este dominio, probamos el siguiente idioma
         }
       }
 
-      if (itemData) {
-        const itemId = itemData.id;
-        const name = itemData.name;
-        const iconName = itemData.icon ? itemData.icon.toLowerCase() : 'inv_misc_questionmark';
-        const qualityId = itemData.quality !== undefined ? itemData.quality : 1;
+      if (itemResult) {
+        const itemId = itemResult.id;
+        const name = itemResult.name || itemName;
+        const iconName = itemResult.icon ? itemResult.icon.toLowerCase() : 'inv_misc_questionmark';
+        const qualityId = itemResult.quality !== undefined ? itemResult.quality : 1;
         
-        const itemUrl = `https://${targetDomain}/item=${itemId}`;
+        // Adaptado a la estructura Forever que descubriste (/forever/es/item=ID)
+        const langCode = targetDomain.split('.')[0]; // 'es', 'fr' o 'www' (si es www podemos usar 'en' o dejarlo limpio)
+        const pathLang = langCode === 'www' ? 'en' : langCode;
+        
+        const itemUrl = `https://${targetDomain}/forever/${pathLang}/item=${itemId}`;
         const iconUrl = `https://wowhead.zamimg.com/images/wow/icons/large/${iconName}.jpg`;
         const embedColor = QUALITY_COLORS[qualityId] || '#ffffff';
 
@@ -104,7 +100,7 @@ client.on('messageCreate', async (message) => {
           allowedMentions: { repliedUser: false }
         });
       } else {
-        console.log(`[LOG] No se encontró el objeto "${itemName}" en ningún dominio.`);
+        console.log(`[LOG] No se encontró el objeto "${itemName}" en ningún idioma.`);
       }
     } catch (error) {
       console.error(`[ERROR] Procesando "${itemName}":`, error.message);
